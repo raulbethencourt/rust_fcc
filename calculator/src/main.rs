@@ -36,5 +36,3 @@ fn output(first_number: f32, operator: char, second_number: f32, result: f32) ->
         first_number, operator, second_number, result
     )
 }
-
-//TODO 29:28 crear github
