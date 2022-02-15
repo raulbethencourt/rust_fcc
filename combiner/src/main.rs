@@ -1,20 +1,15 @@
-// 1:02:34
 mod args;
 use args::Args;
-<<<<<<< HEAD
-use image::{io::Reader, DynamicImage, ImageFormat};
-=======
 use image::{
     imageops::FilterType::Triangle, io::Reader, DynamicImage, GenericImageView, ImageFormat,
 };
->>>>>>> 4975568
-use std::{fs::File, io::BufReader};
+use std::{fs::File, io::BufReader, u8};
 
 #[derive(Debug)]
 enum ImageDataErrors {
     DifferentImageFormats,
-<<<<<<< HEAD
-=======
+    BufferTooSmall,
+    UnableToReadImageFromPath(std::io::Error),
 }
 
 #[derive(Debug)]
@@ -36,6 +31,13 @@ impl FloatingImage {
             name,
         }
     }
+    fn set_data(&mut self, data: Vec<u8>) -> Result<(), ImageDataErrors> {
+        if data.len() > self.data.capacity() {
+            return Err(ImageDataErrors::BufferTooSmall);
+        }
+        self.data = data;
+        Ok(())
+    }
 }
 
 fn main() -> Result<(), ImageDataErrors> {
@@ -48,15 +50,33 @@ fn main() -> Result<(), ImageDataErrors> {
     }
 
     let (image_1, image_2) = standardise_size(image_1, image_2);
-    let output = FloatingImage::new(image_1.width(), image_1.height(), args.output);
+    let mut output = FloatingImage::new(image_1.width(), image_1.height(), args.output);
+
+    let combined_data = combine_images(image_1, image_2);
+    output.set_data(combined_data)?;
+
+    image::save_buffer_with_format(
+        output.name,
+        &output.data,
+        output.width,
+        output.height,
+        image::ColorType::Rgba8,
+        image_format_1,
+    )
+    .unwrap();
     Ok(())
 }
 
 fn find_image_from_path(path: String) -> (DynamicImage, ImageFormat) {
+    match Reader::open(path) {
+        Ok(image_reader) => {
+            let image_format: ImageFormat = image_reader.format().unwrap();
+            let image: DynamicImage = image_reader.decode().unwrap();
+            (image, image_format)
+        }
+        Err(e) => Err(ImageDataErrors::UnableToReadImageFromPath(e)),
+    }
     let image_reader: Reader<BufReader<File>> = Reader::open(path).unwrap();
-    let image_format: ImageFormat = image_reader.format().unwrap();
-    let image: DynamicImage = image_reader.decode().unwrap();
-    (image, image_format)
 }
 
 fn get_smallest_dimensions(dim_1: (u32, u32), dim_2: (u32, u32)) -> (u32, u32) {
@@ -74,25 +94,38 @@ fn standardise_size(image_1: DynamicImage, image_2: DynamicImage) -> (DynamicIma
     } else {
         (image_1, image_2.resize_exact(width, height, Triangle))
     }
->>>>>>> 4975568
 }
 
-fn main() -> Result<(), ImageDataErrors> {
-    let args = Args::new();
-    let (image_1, image_format_1) = find_image_from_path(args.image_1);
-    let (image_2, image_format_2) = find_image_from_path(args.image_2);
+fn combine_images(image_1: DynamicImage, image_2: DynamicImage) -> Vec<u8> {
+    let vec_1 = image_1.to_rgba8().into_vec();
+    let vec_2 = image_2.to_rgba8().into_vec();
 
-    if image_format_1 != image_format_2 {
-        return Err(ImageDataErrors::DifferentImageFormats);
+    alternate_pixels(vec_1, vec_2)
+}
+
+fn alternate_pixels(vec_1: Vec<u8>, vec_2: Vec<u8>) -> Vec<u8> {
+    let mut combined_data = vec![0u8; vec_1.len()];
+
+    let mut i = 0;
+    while i < vec_1.len() {
+        if i % 8 == 0 {
+            combined_data.splice(i..=i + 3, set_rgba(&vec_1, i, i + 3));
+        } else {
+            combined_data.splice(i..=i + 3, set_rgba(&vec_2, i, i + 3));
+        }
+        i += 4;
     }
-    Ok(())
+    combined_data
 }
 
-fn find_image_from_path(path: String) -> (DynamicImage, ImageFormat) {
-    let image_reader: Reader<BufReader<File>> = Reader::open(path).unwrap();
-    let image_format: ImageFormat = image_reader.format().unwrap();
-    let image: DynamicImage = image_reader.decode().unwrap();
-    (image, image_format)
+fn set_rgba(vec: &Vec<u8>, start: usize, end: usize) -> Vec<u8> {
+    let mut rgba = Vec::new();
+    for i in start..=end {
+        let val: u8 = match vec.get(i) {
+            Some(d) => *d,
+            None => panic!("Index out of bounds"),
+        };
+        rgba.push(val);
+    }
+    rgba
 }
-
-//47:32
